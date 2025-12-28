@@ -17,9 +17,14 @@ function HomePage() {
   const [showFeatureModal, setShowFeatureModal] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState(null);
 
-  // Add Product Modal State (add to existing state)
-const [showProductModal, setShowProductModal] = useState(false);
-const [selectedProduct, setSelectedProduct] = useState(null);
+// Product Model State
+    const [showProductModal, setShowProductModal] = useState(false);
+    const [selectedProduct, setSelectedProduct] = useState(null);
+
+// Auth state
+
+  const [showUserMenu, setShowUserMenu] = useState(false);
+ const [cartCount, setCartCount] = useState(0);
 
   // Calculator State
   const [billAmount, setBillAmount] = useState("");
@@ -155,8 +160,7 @@ const [selectedProduct, setSelectedProduct] = useState(null);
     },
   };
 
-
-// Product Details Data
+  // Product Details Data
 const productDetailsData = {
   "3kW Solar System": {
     name: "3kW Solar System",
@@ -285,6 +289,7 @@ const productDetailsData = {
       downPayment: "₹30,000"
     }
   },
+
   "Wireless Solar Charger": {
     name: "Wireless Solar Charger",
     price: "₹3,999",
@@ -407,30 +412,48 @@ const productDetailsData = {
       "5-year battery warranty"
     ],
     emi: null
-  }
+  },
+  
 };
-
 
 // ============ EFFECTS ============
 
-// Check if user is logged in on mount
-useEffect(() => {
+ useEffect(() => {
   const token = localStorage.getItem("token");
-    const user = localStorage.getItem("user");
+  const user = localStorage.getItem("user");
 
-    if (token && user) {
-      try {
-        const userData = JSON.parse(user);
-        setIsLoggedIn(true);
-        setUserName(userData.name);
-        console.log("✅ User logged in:", userData.name);
-      } catch (error) {
-        console.error("Error parsing user data:", error);
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-      }
+  if (token && user) {
+    try {
+      const userData = JSON.parse(user);
+      setIsLoggedIn(true);
+      setUserName(userData.name);
+      setEmail(userData.email);  // Add this
+      
+      // Load cart count
+      const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+      setCartCount(cart.length);
+      
+      console.log("✅ User logged in:", userData.name);
+    } catch (error) {
+      console.error("Error parsing user data:", error);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
     }
-  }, []);
+  }
+}, []);
+
+// Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showUserMenu && !e.target.closest('.user-menu-container')) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showUserMenu]);
+
+
   
   // Stars Animation
   useEffect(() => {
@@ -449,6 +472,39 @@ useEffect(() => {
       }
     }
   }, []);
+
+useEffect(() => {
+  const loadUserData = async () => {
+    const token = localStorage.getItem("token");
+    const user = localStorage.getItem("user");
+
+    if (token && user) {
+      try {
+        const userData = JSON.parse(user);
+        setIsLoggedIn(true);
+        setUserName(userData.name);
+        setEmail(userData.email);
+        
+        // ✅ Load cart count from backend
+        const response = await fetch('http://localhost:5000/api/cart', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setCartCount(data.cart.totalItems || 0);
+        }
+ }
+   catch (error) {
+        console.error("Error loading user data:", error);
+      }
+    }
+  };
+
+  loadUserData();
+}, []);
   
   // ============ EVENT HANDLERS ============
   
@@ -509,7 +565,8 @@ useEffect(() => {
       );
     }
   };
-  // Handle Product Click
+  
+// Handle Product Click
 const handleProductClick = (productName) => {
   console.log("=== PRODUCT CLICK DEBUG ===");
   console.log("1. Clicked product:", productName);
@@ -532,11 +589,66 @@ const handleProductClick = (productName) => {
 };
   
   // // Add to Cart Function
-  const handleAddToCart = (product) => {
-    alert(`✅ ${product.name} added to cart!`);
-    // You can integrate with your cart system here
-  };
+// In HomePage.jsx
+
+const handleAddToCart = async (product) => {
+  const token = localStorage.getItem('token');
   
+  if (!token) {
+    alert('⚠️ Please login first to add items to cart');
+    navigate('/login');
+    return;
+  }
+
+  console.log('=== FRONTEND DEBUG ===');
+  console.log('1. Token exists:', !!token);
+  console.log('2. Product ID:', product._id || product.name);
+
+  try {
+    const response = await fetch('http://localhost:5000/api/cart', {  // ✅ FIXED endpoint
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        productId: product._id || product.name,  // ✅ FIXED: productId only
+        quantity: 1
+      })
+    });
+
+    console.log('3. Response status:', response.status);
+    const data = await response.json();
+    console.log('4. Response data:', data);
+
+    if (response.ok && data.success) {
+      setCartCount(data.cart?.length || 1);
+      localStorage.setItem('cartCount', data.cart?.length || 1);
+      alert(`✅ ${product.name} added to cart! (${data.cart?.length || 1} items)`);
+    } else {
+      alert('❌ ' + (data.message || 'Failed to add to cart'));
+    }
+  } catch (error) {
+    console.error('❌ Add to cart error:', error);
+    alert('❌ Cannot connect to server.');
+  }
+};
+
+
+
+// Handle Log out 
+const handleLogout = () => {
+    if (window.confirm('Are you sure you want to logout?')) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      setIsLoggedIn(false);
+      setUserName("");
+      setEmail("");
+      setShowUserMenu(false);
+      alert("✅ Logged out successfully!");
+      navigate("/");
+    }
+  };
 
 
   // Calculator Logic
@@ -581,6 +693,53 @@ const handleProductClick = (productName) => {
   };
 
   // const navigate = useNavigate();   // ✅ inside component
+
+  // Add this function with other handlers
+const saveCalculation = async () => {
+  const token = localStorage.getItem('token');
+  
+  if (!token) {
+    alert('⚠️ Please login first!');
+    navigate('/login');
+    return;
+  }
+
+  try {
+    // ✅ ONLY save to calculations collection (for Saved page)
+    const response = await fetch('http://localhost:5000/api/calculations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        input: {
+          monthlyBill: parseFloat(billAmount),
+          roofSpace: parseFloat(roofSpace),
+          location: location
+        },
+        results
+      })
+    });
+
+    if (response.ok) {
+      // ✅ ONLY update COUNT in profile (no full history)
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const updatedUser = {
+        ...user,
+        calculationCount: (user.calculationCount || 0) + 1  // Just increment count
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      
+      alert('✅ Saved to history!');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('❌ Save failed');
+  }
+};
+
+
 
   return (
     <>
@@ -658,8 +817,8 @@ const handleProductClick = (productName) => {
         </div>
       )}
 
-      {/* Features Data Model */}
-      {showFeatureModal && selectedFeature && (
+{/* Features Data Model */}
+{showFeatureModal && selectedFeature && (
         <div
           className="modal-overlay"
           onClick={() => setShowFeatureModal(false)}
@@ -969,30 +1128,373 @@ const handleProductClick = (productName) => {
               <span className="logo-icon">☀️</span>
               <span>SOLAR MARKETPLACE</span>
             </div>
-            <ul className="nav-links">
-              <li>
-                <a href="#home">Home</a>
-              </li>
-              <li>
-                <a href="#calculator">Calculator</a>
-              </li>
-              <li>
-                <a href="#products">Products</a>
-              </li>
-              <li>
-                <a href="#dashboard">Dashboard</a>
-              </li>
-            </ul>
-             <div className="nav-buttons">
-              {isLoggedIn ? (
-                <span style={{ color: "#ffc832", marginRight: "10px" }}>
-                  Hi, {userName}
-                </span>
-              ) : null}
-              </div>
+         <ul className="nav-links">
+            <li><a href="#home">Home</a></li>
+            <li><a href="#calculator">Calculator</a></li>
+            <li>
+              <a 
+                href="#products" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/products');
+                }}
+              >
+                Products
+              </a>
+            </li>
+            <li>
+              <a 
+                href="#dashboard" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('/dashboard');
+                }}
+              >
+                Dashboard
+              </a>
+            </li>
+          </ul>
 
-            {/* // HomePage.jsx navbar buttons */}
               <div className="nav-buttons">
+            {isLoggedIn ? (
+              // ✅ LOGGED IN - SHOW USERNAME WITH DROPDOWN
+              <div className="user-menu-container" style={{ position: 'relative' }}>
+                {/* Username Button (Clickable) */}
+                <button
+                  className="user-greeting-btn"
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  style={{
+                    background: 'transparent',
+                    border: '2px solid #ffc832',
+                    borderRadius: '25px',
+                    padding: '10px 20px',
+                    color: '#ffc832',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.3s',
+                    fontFamily: "'Rajdhani', sans-serif"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 200, 50, 0.1)';
+                    e.currentTarget.style.borderColor = '#ffc832';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  <span>Hi, {userName}</span>
+                  <span style={{ 
+                    fontSize: '10px', 
+                    transform: showUserMenu ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.3s'
+                  }}>
+                    ▼
+                  </span>
+                </button>
+
+            {/* Dropdown Menu */}
+                {showUserMenu && (
+                  <div className="user-dropdown-menu" style={{
+                      position: 'fixed',  // ✅ Change from absolute to fixed
+                      top: '80px',  // ✅ Fixed position from top
+                      right: '20px',  // ✅ Fixed position from right
+                      background: 'rgba(10, 14, 39, 0.95)',  // ✅ Semi-transparent
+                      backdropFilter: 'blur(20px)',  // ✅ Glassmorphism blur
+                      WebkitBackdropFilter: 'blur(20px)',  // ✅ Safari support
+                      border: '2px solid #ffc832',
+                      borderRadius: '20px',
+                      minWidth: '280px',
+                      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.8)',  // ✅ Darker shadow
+                      padding: '15px 0',
+                      zIndex: 999999,// ✅ Very high z-index
+                      animation: 'dropdownSlideIn 0.3s ease'
+                  }}>
+    
+              {/* User Info Header */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '15px',
+                      padding: '15px 20px',
+                      background: 'rgba(255, 200, 50, 0.05)',
+                      borderBottom: '1px solid rgba(255, 200, 50, 0.2)',
+                      marginBottom: '10px'
+                    }}>
+                      <div style={{
+                        width: '50px',
+                        height: '50px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #ffc832, #ff6b35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '24px',
+                        fontWeight: '900',
+                        color: '#0a0e27',
+                        fontFamily: "'Orbitron', sans-serif"
+                      }}>
+                        {userName.charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          fontSize: '18px',
+                          fontWeight: '700',
+                          color: '#fff',
+                          marginBottom: '4px'
+                        }}>
+                          {userName}
+                        </div>
+                        <div style={{
+                          fontSize: '13px',
+                          color: '#aaa',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {email}
+                        </div>
+                      </div>
+                    </div>
+
+              {/* Menu Items */}
+                    <button
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        navigate('/profile');
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 20px',
+                        background: 'none',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s',
+                        textAlign: 'left',
+                        fontFamily: "'Rajdhani', sans-serif"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 200, 50, 0.1)';
+                        e.currentTarget.style.paddingLeft = '25px';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'none';
+                        e.currentTarget.style.paddingLeft = '20px';
+                      }}
+                    >
+                      <span style={{ fontSize: '20px', width: '24px', textAlign: 'center' }}>👤</span>
+                      My Profile
+                    </button>
+
+                    <button
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        navigate('/cart');
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 20px',
+                        background: 'none',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s',
+                        textAlign: 'left',
+                        fontFamily: "'Rajdhani', sans-serif",
+                        position: 'relative'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 200, 50, 0.1)';
+                        e.currentTarget.style.paddingLeft = '25px';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'none';
+                        e.currentTarget.style.paddingLeft = '20px';
+                      }}
+                    >
+                      <span style={{ fontSize: '20px', width: '24px', textAlign: 'center' }}>🛒</span>
+                      Cart
+                      {cartCount > 0 && (
+                        <span style={{
+                          position: 'absolute',
+                          right: '20px',
+                          background: '#ff6b35',
+                          color: '#fff',
+                          borderRadius: '12px',
+                          padding: '2px 8px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          fontFamily: "'Orbitron', sans-serif"
+                        }}>
+                          {cartCount}
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        navigate('/orders');
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 20px',
+                        background: 'none',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s',
+                        textAlign: 'left',
+                        fontFamily: "'Rajdhani', sans-serif"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 200, 50, 0.1)';
+                        e.currentTarget.style.paddingLeft = '25px';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'none';
+                        e.currentTarget.style.paddingLeft = '20px';
+                      }}
+                    >
+                      <span style={{ fontSize: '20px', width: '24px', textAlign: 'center' }}>📦</span>
+                      My Orders
+                    </button>
+
+                    <button
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        navigate('/saved-calculations');
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 20px',
+                        background: 'none',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s',
+                        textAlign: 'left',
+                        fontFamily: "'Rajdhani', sans-serif"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 200, 50, 0.1)';
+                        e.currentTarget.style.paddingLeft = '25px';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'none';
+                        e.currentTarget.style.paddingLeft = '20px';
+                      }}
+                    >
+                      <span style={{ fontSize: '20px', width: '24px', textAlign: 'center' }}>💾</span>
+                      Saved Calculations
+                    </button>
+
+                    <button
+                      className="dropdown-menu-item"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        navigate('/settings');
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 20px',
+                        background: 'none',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '15px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s',
+                        textAlign: 'left',
+                        fontFamily: "'Rajdhani', sans-serif"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 200, 50, 0.1)';
+                        e.currentTarget.style.paddingLeft = '25px';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'none';
+                        e.currentTarget.style.paddingLeft = '20px';
+                      }}
+                    >
+                      <span style={{ fontSize: '20px', width: '24px', textAlign: 'center' }}>⚙️</span>
+                      Settings
+                    </button>
+
+                    <div style={{
+                      height: '1px',
+                      background: 'rgba(255, 200, 50, 0.2)',
+                      margin: '10px 0'
+                    }}></div>
+
+                    <button
+                      className="dropdown-menu-item"
+                      onClick={handleLogout}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '12px 20px',
+                        background: 'none',
+                        border: 'none',
+                        color: '#ff6b35',
+                        fontSize: '15px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s',
+                        textAlign: 'left',
+                        fontFamily: "'Rajdhani', sans-serif"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 107, 53, 0.1)';
+                        e.currentTarget.style.paddingLeft = '25px';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'none';
+                        e.currentTarget.style.paddingLeft = '20px';
+                      }}
+                    >
+                      <span style={{ fontSize: '20px', width: '24px', textAlign: 'center' }}>🚪</span>
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+  ) : (
+              // ✅ NOT LOGGED IN - SHOW SIGN IN / GET STARTED BUTTONS
+              <>
                 <button
                   className="btn btn-secondary"
                   onClick={() => navigate('/login')}
@@ -1005,9 +1507,10 @@ const handleProductClick = (productName) => {
                 >
                   GET STARTED
                 </button>
-</div>
-
-          </nav>
+              </>
+            )}
+          </div>
+        </nav>
           {/* HERO SECTION */}
           <section className="hero" id="home">
             <div className="hero-content">
@@ -1143,12 +1646,23 @@ const handleProductClick = (productName) => {
                     </div>
                   </div>
                   <button
-                    className="save-btn"
-                    onClick={() => alert("✅ Saved to your profile!")}
-                    style={{ marginTop: "20px" }}
-                  >
-                    💾 SAVE TO PROFILE
-                  </button>
+      className="btn btn-primary"
+      onClick={saveCalculation}
+      style={{
+       width: '100%',
+      marginTop: '20px',
+      padding: '15px',
+      background: 'linear-gradient(135deg, #4ade80, #22c55e)',
+      color: '#0a0e27',
+      border: 'none',
+      borderRadius: '12px',
+      fontSize: '16px',
+      fontWeight: 'bold',
+      cursor: 'pointer'
+        }}
+    >
+      💾 SAVE TO PROFILE
+    </button>
                 </div>
               )}
             </div>
@@ -1225,7 +1739,7 @@ const handleProductClick = (productName) => {
             </div>
           </section>
 
-         {/* Products Section*/}
+{/* Products Section*/}
 <section className="products-section" id="products">
   <h2 className="section-title">🛒 OUR PRODUCTS</h2>
   <p className="section-subtitle">
@@ -1313,7 +1827,8 @@ const handleProductClick = (productName) => {
   </div>
 </section>
 
-          {/* Dashboard Section */}
+
+      {/* Dashboard Section */}
           <section className="dashboard-section" id="dashboard">
             <h2 className="section-title">📊 YOUR SOLAR DASHBOARD</h2>
             <p className="section-subtitle">
@@ -1447,6 +1962,18 @@ const handleProductClick = (productName) => {
               © 2025 Solar Marketplace. All Rights Reserved.
             </p>
           </footer>
+         <style>{`
+        @keyframes dropdownSlideIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
         </div>
       </div>
     </>
