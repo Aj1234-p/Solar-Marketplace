@@ -695,17 +695,25 @@ const handleLogout = () => {
   // const navigate = useNavigate();   // ✅ inside component
 
   // Add this function with other handlers
+// This is a DIFFERENT function - don't mix them!
 const saveCalculation = async () => {
   const token = localStorage.getItem('token');
   
   if (!token) {
-    alert('⚠️ Please login first!');
+    alert('⚠️ Please login first to save calculations!');
     navigate('/login');
     return;
   }
 
+  // Helper function to extract numbers from formatted strings
+  const extractNumber = (str) => {
+    if (!str) return 0;
+    // Remove ₹, commas, letters, %, and extract just the number
+    const num = str.toString().replace(/[₹,a-zA-Z%\s]/g, '');
+    return parseFloat(num) || 0;
+  };
+
   try {
-    // ✅ ONLY save to calculations collection (for Saved page)
     const response = await fetch('http://localhost:5000/api/calculations', {
       method: 'POST',
       headers: {
@@ -715,32 +723,38 @@ const saveCalculation = async () => {
       body: JSON.stringify({
         input: {
           monthlyBill: parseFloat(billAmount),
-          roofSpace: parseFloat(roofSpace),
-          location: location
+          location: location,
+          roofSpace: parseFloat(roofSpace)
         },
-        results
+        output: {
+          systemSize: extractNumber(results.systemSize),        // "8.0 kW" → 8.0
+          panelCount: extractNumber(results.panelCount),        // "15 panels" → 15
+          totalCost: extractNumber(results.totalCost),          // "₹4,38,000" → 438000
+          subsidy: extractNumber(results.subsidy),              // "₹87,600" → 87600
+          afterSubsidy: extractNumber(results.netCost),         // "₹3,50,400" → 350400
+          savings25Years: extractNumber(results.savings),       // "₹25,36,500" → 2536500
+          paybackYears: extractNumber(results.payback),         // "5.5 years" → 5.5
+          roi: extractNumber(results.roi),                      // "724%" → 724
+          monthlyEMI: extractNumber(results.monthlyEMI)         // "₹5840/month" → 5840
+        }
       })
     });
 
+    console.log('Save calculation response:', response.status);
+
     if (response.ok) {
-      // ✅ ONLY update COUNT in profile (no full history)
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const updatedUser = {
-        ...user,
-        calculationCount: (user.calculationCount || 0) + 1  // Just increment count
-      };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      
-      alert('✅ Saved to history!');
+      alert('✅ Calculation saved successfully!');
+      navigate('/saved-calculations');
+    } else {
+      const data = await response.json();
+      console.error('Save error:', data);
+      alert('❌ ' + (data.message || 'Failed to save calculation'));
     }
   } catch (error) {
-    console.error('Error:', error);
-    alert('❌ Save failed');
+    console.error('Error saving calculation:', error);
+    alert('❌ Cannot connect to server');
   }
 };
-
-
-
   return (
     <>
       {/* ========== SIGN IN MODAL ========== */}

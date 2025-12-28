@@ -16,19 +16,33 @@ export default function SavedCalculations() {
       return;
     }
 
+    console.log('=== LOADING CALCULATIONS ===');
+    console.log('1. Token exists:', !!token);
+
     try {
-     const response = await fetch('http://localhost:5000/api/calculations/my', {
+      const response = await fetch('http://localhost:5000/api/calculations', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
+      console.log('2. Response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
-        setCalculations(data.calculations || []);
+        console.log('3. Data received:', data);
+        console.log('4. Calculations count:', data.data?.length || 0);
+        
+        // ✅ Backend returns 'data' not 'calculations'
+        setCalculations(data.data || []);
+      } else {
+        const errorData = await response.json();
+        console.error('5. Error response:', errorData);
+        alert('Failed to load calculations: ' + (errorData.message || 'Unknown error'));
       }
     } catch (error) {
-      console.error('Error loading calculations:', error);
+      console.error('6. Fetch error:', error);
+      alert('Cannot connect to server. Make sure backend is running on port 5000');
     } finally {
       setLoading(false);
     }
@@ -156,16 +170,15 @@ export default function SavedCalculations() {
                       <h3 style={{ fontSize: '20px', color: '#ffc832', marginBottom: '5px' }}>
                         📊 Calculation #{index + 1}
                       </h3>
-                    <p style={{ fontSize: '14px', color: '#aaa' }}>
-                      Saved on: {new Date(calc.createdAt || calc.savedAt).toLocaleDateString('en-IN', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-
+                      <p style={{ fontSize: '14px', color: '#aaa' }}>
+                        Saved on: {new Date(calc.createdAt).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
                     </div>
                     <button
                       onClick={() => deleteCalculation(calc._id)}
@@ -185,58 +198,67 @@ export default function SavedCalculations() {
                   </div>
 
                   {/* Results Grid */}
-                  {/* Results Grid - FIXED data paths */}
-<div style={{
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-  gap: '15px'
-}}>
-  <CalcItem 
-    label="Monthly Bill" 
-    value={`₹${calc.input?.monthlyBill?.toLocaleString('en-IN') || 'N/A'}`} 
-  />
-  <CalcItem 
-    label="Location" 
-    value={calc.input?.location || 'N/A'} 
-  />
-  <CalcItem 
-    label="Roof Space" 
-    value={`${calc.input?.roofSpace || 'N/A'} sq ft`} 
-  />
-  <CalcItem 
-    label="System Size" 
-    value={`${calc.results?.systemSize || 'N/A'} kW`} 
-  />
-  <CalcItem 
-    label="Panel Count" 
-    value={calc.results?.panelCount || 'N/A'} 
-  />
-  <CalcItem 
-    label="Total Cost" 
-    value={`₹${calc.results?.totalCost || 'N/A'}`} 
-  />
-  <CalcItem 
-    label="Subsidy" 
-    value={`₹${calc.results?.subsidy || 'N/A'}`} 
-  />
-  <CalcItem 
-    label="Net Cost" 
-    value={`₹${calc.results?.netCost || 'N/A'}`} 
-  />
-  <CalcItem 
-    label="Monthly Savings" 
-    value={`₹${calc.results?.savings || 'N/A'}`} 
-  />
-  <CalcItem 
-    label="Payback Period" 
-    value={calc.results?.payback || 'N/A'} 
-  />
-  <CalcItem 
-    label="ROI" 
-    value={calc.results?.roi || 'N/A'} 
-  />
-</div>
-
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '15px'
+                  }}>
+                    {/* Input Data */}
+                    <CalcItem 
+                      label="Monthly Bill" 
+                      value={calc.input?.monthlyBill ? `₹${calc.input.monthlyBill.toLocaleString('en-IN')}` : 'N/A'} 
+                    />
+                    <CalcItem 
+                      label="Location" 
+                      value={calc.input?.location || 'N/A'} 
+                      icon="📍"
+                    />
+                    <CalcItem 
+                      label="Roof Space" 
+                      value={calc.input?.roofSpace ? `${calc.input.roofSpace} sq ft` : 'N/A'} 
+                    />
+                    
+                    {/* Results Data - Format numbers back to readable format */}
+                    <CalcItem 
+                      label="System Size" 
+                      value={calc.output?.systemSize ? `${calc.output.systemSize} kW` : 'N/A'} 
+                      highlight
+                    />
+                    <CalcItem 
+                      label="Panel Count" 
+                      value={calc.output?.panelCount ? `${calc.output.panelCount} panels` : 'N/A'} 
+                    />
+                    <CalcItem 
+                      label="Total Cost" 
+                      value={calc.output?.totalCost ? `₹${calc.output.totalCost.toLocaleString('en-IN')}` : 'N/A'} 
+                    />
+                    <CalcItem 
+                      label="Subsidy" 
+                      value={calc.output?.subsidy ? `₹${calc.output.subsidy.toLocaleString('en-IN')}` : 'N/A'} 
+                    />
+                    <CalcItem 
+                      label="After Subsidy" 
+                      value={calc.output?.afterSubsidy ? `₹${calc.output.afterSubsidy.toLocaleString('en-IN')}` : 'N/A'} 
+                      highlight
+                    />
+                    <CalcItem 
+                      label="25Y Savings" 
+                      value={calc.output?.savings25Years ? `₹${calc.output.savings25Years.toLocaleString('en-IN')}` : 'N/A'} 
+                    />
+                    <CalcItem 
+                      label="Payback Period" 
+                      value={calc.output?.paybackYears ? `${calc.output.paybackYears} years` : 'N/A'} 
+                    />
+                    <CalcItem 
+                      label="ROI" 
+                      value={calc.output?.roi ? `${calc.output.roi}%` : 'N/A'} 
+                      highlight
+                    />
+                    <CalcItem 
+                      label="Monthly EMI" 
+                      value={calc.output?.monthlyEMI ? `₹${calc.output.monthlyEMI.toLocaleString('en-IN')}/month` : 'N/A'} 
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -247,21 +269,31 @@ export default function SavedCalculations() {
   );
 }
 
-function CalcItem({ label, value }) {
+function CalcItem({ label, value, icon, highlight }) {
   return (
     <div style={{
-      background: 'rgba(255, 200, 50, 0.05)',
+      background: highlight ? 'rgba(255, 200, 50, 0.1)' : 'rgba(255, 200, 50, 0.05)',
       padding: '15px',
       borderRadius: '10px',
-      borderLeft: '3px solid #ffc832'
+      borderLeft: `3px solid ${highlight ? '#ffc832' : 'rgba(255, 200, 50, 0.3)'}`,
+      transition: 'all 0.3s'
     }}>
-      <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '5px', textTransform: 'uppercase' }}>
+      <div style={{ 
+        fontSize: '12px', 
+        color: '#aaa', 
+        marginBottom: '5px', 
+        textTransform: 'uppercase',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '5px'
+      }}>
+        {icon && <span>{icon}</span>}
         {label}
       </div>
       <div style={{
         fontSize: '18px',
         fontWeight: 'bold',
-        color: '#ffc832',
+        color: highlight ? '#ffc832' : '#fff',
         fontFamily: "'Orbitron', sans-serif"
       }}>
         {value}
